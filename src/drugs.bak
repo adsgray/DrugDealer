@@ -1,0 +1,249 @@
+{$V-}
+uses
+  DrugDealData, DrugMenus, DrugDisplays,
+  CursorControl,
+  Crt, Dos;
+
+{========= FILE PROCEDURES ================================================}
+function fileExist(var s : string) : boolean;
+begin
+  fileExist := fSearch(s, '') <> '';
+end;
+
+Procedure ForceExt(var filename: string; EXT: string);
+{ forces extension of EXT onto filename }
+var
+ Index,
+ ExtLength : integer;
+
+begin
+  if pos('.',filename)=0 then
+   filename:=filename+'.'+EXT
+  else
+  begin
+   Index:=pos('.',filename);
+   ExtLength:=length(filename)-Index;
+   delete(filename,Index,ExtLength+1);
+   filename:=filename+'.'+EXT;
+  end; {else}
+end; {ForceExt}
+{==========================================================================}
+
+procedure writesnd(InString : String);
+var tc : byte;
+begin
+  for tc := 1 to length(InString) do begin
+    write(InString[tc]);
+    sound(550); delay(25); nosound;
+  end;
+end;
+
+const origmode:word = 3;
+procedure InitScreen;
+begin
+  if lastmode <> c80 then begin
+    origmode := lastmode;
+    textmode(c80);
+  end;
+  textbackground(cyan); clrscr;
+  MainWindow.Show;
+  MainWindow.Shrink(1);
+  Mmain.show;
+  ShowDealer(Dealer);
+  ShowCity(City[Dealer.CurCity]);
+  MainWindow.Current;
+  writesnd('Enter Your Name> ');
+  readln(Dealer.Name);
+  MainWindow.SavePos;
+  Cursor_Off;
+  ShowDealer(Dealer);
+end;
+
+procedure Done;
+begin
+  Cursor_On;
+  textmode(origmode);
+  Halt(0);
+end;
+
+procedure Mw;
+begin
+  MainWindow.Current;
+  MainWindow.ResPos;
+  Cursor_On;
+  readln;
+  MainWindow.SavePos;
+  Cursor_Off;
+end;
+
+const CR = #10#13; {writeln}
+
+
+{============ FILE PROCEDURES =============================================}
+procedure SaveGame;
+var
+  fn : string[30];
+  f  : file;
+begin
+  Cursor_On;
+  mainwindow.current;
+  mainwindow.respos;
+  writesnd('Save game to filename> ');
+  readln(fn);
+  if fn <> '' then begin
+  forceext(fn,'DRG');
+  if fileexist(fn) then
+    writesnd('Overwriting file...')
+  else
+    writesnd('Saving File...');
+    assign(f,fn);
+    rewrite(f,1);
+      blockwrite(f,dealer,sizeof(dealerinfotype));
+      writesnd('....');
+      blockwrite(f,city,sizeof(cityarray));
+      writesnd('........');
+      blockwrite(f,drug,sizeof(drugarray));
+      writesnd('......'+CR);
+    close(f);
+    writesnd('Done!'+CR);
+  end;
+  mainwindow.savepos;
+  Cursor_Off;
+end;
+
+
+procedure LoadGame;
+var
+  fn : string[30];
+  f  : file;
+begin
+  Cursor_On;
+  mainwindow.current;
+  mainwindow.respos;
+  writesnd('Load game from filename> ');
+  readln(fn);
+  forceext(fn,'DRG');
+  if not fileexist(fn) then begin
+    writesnd('File not found.'+CR);
+    mainwindow.savepos;
+  end
+  else begin
+    writesnd('Loading File...');
+    assign(f,fn);
+    reset(f,1);
+      blockread(f,dealer,sizeof(dealerinfotype));
+      writesnd('....');
+      blockread(f,city,sizeof(cityarray));
+      writesnd('........');
+      blockread(f,drug,sizeof(drugarray));
+      writesnd('......'+CR);
+    close(f);
+    writesnd('Done!'+CR);
+    mainwindow.savepos;
+    ShowDealer(Dealer);
+    ShowCity(City[Dealer.CurCity]);
+  end;
+  Cursor_Off;
+end;
+{==========================================================================}
+
+procedure ChooseCar;
+begin
+  MCarList.Show;
+  repeat until MCarList.choose(true) = 0;
+  MCarList.Hide(cyan);
+end;
+
+procedure ChooseGun;
+begin
+  MGunList.Show;
+  repeat until MGunList.choose(true) = 0;
+  MGunList.Hide(cyan);
+end;
+
+procedure ChooseDrug;
+begin
+  MDrugList.Show;
+  repeat until MDrugList.choose(true) = 0;
+  MDrugList.Hide(cyan);
+end;
+
+var choice1:byte;
+begin {MAIN}
+  InitScreen;
+  repeat
+    choice1 := Mmain.choose(false);
+    Mmain.hide(cyan);
+    case choice1 of
+       1 : begin {Travel}
+            Mtravel.show;
+            choice1 := Mtravel.choose(true);
+            if choice1 <> 0 then begin
+                Dealer.CurCity := CityType(choice1 - 1);
+                ShowCity(City[Dealer.CurCity]);
+            end;
+            choice1 := 1;
+            Mtravel.hide(cyan);
+            MMain.show;
+           end;
+       2 : begin {Purchase}
+            Mpurchase.show;
+            case Mpurchase.choose(true) of
+               1: {Car} begin
+               Mpurchase.hide(cyan);
+               choosecar; end;
+               2: {Gun} begin
+               Mpurchase.hide(cyan);
+               choosegun;
+               end;
+               3: {Drugs} begin
+               Mpurchase.hide(cyan);
+               choosedrug;
+               end;
+            end;
+            MMain.show;
+           end;
+       3 : begin {Drugs}
+            Mdrugs.show;
+            case Mdrugs.choose(true) of
+              1: {Buy} begin
+               Mdrugs.hide(cyan);
+               choosedrug;
+               end;
+              2: {Sell} begin
+               Mdrugs.hide(cyan);
+               choosedrug;
+               end;
+              3: {Use} begin
+               Mdrugs.hide(cyan);
+               choosedrug;
+               end;
+              4: {Inventory} Mw;
+            end;
+            Mdrugs.hide(cyan);
+            MMain.show;
+           end;
+       4 : begin {View}
+            Mview.show;
+            case Mview.choose(true) of
+              1: {Your stats} Mw;
+              2: {Current City} Mw;
+              3: {Drug Inventory} Mw;
+            end;
+            Mview.hide(cyan);
+            MMain.show;
+           end;
+       5 : begin {File}
+            Mfile.show;
+            case Mfile.choose(true) of
+             1: SaveGame;
+             2: LoadGame;
+             3: Done;
+            end;
+            Mfile.hide(cyan);
+            MMain.show;
+           end;
+    end; {case}
+  until false;
+  Done;
+end.
